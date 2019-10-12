@@ -10,7 +10,7 @@
 	</parent>
 	<groupId>org.jhttping</groupId>
 	<artifactId>jhttping</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
+	<version>1.0-SNAPSHOT</version>
 	<name>jhttping</name>
 	<description>Java Http Ping</description>
 
