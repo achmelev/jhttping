@@ -4,13 +4,9 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.StringReader;
 
-import org.apache.http.HeaderElement;
-import org.apache.http.NameValuePair;
 import org.apache.http.ParseException;
 import org.apache.http.StatusLine;
-import org.apache.http.message.BasicHeaderValueParser;
 import org.apache.http.message.BasicLineParser;
-import org.apache.http.message.HeaderValueParser;
 import org.apache.http.message.LineParser;
 import org.apache.http.message.ParserCursor;
 import org.apache.http.util.CharArrayBuffer;
@@ -19,6 +15,7 @@ public class RequestHead {
 	
 	private int responseCode = -1;
 	private int contentLengthValue = -1;
+	private boolean chunked = false;
 	private boolean malformed = false;
 	private byte[] body = null;
 	
@@ -41,8 +38,9 @@ public class RequestHead {
 							String value = headerLine.substring(headerLine.indexOf(':')+1,headerLine.length()).trim();
 							if (name.equals("Content-Length")) {
 								contentLengthValue = Integer.parseInt(value);
+							} else if (name.endsWith("Transfer-Encoding")) {
+								chunked = value.equals("chunked");
 							}
-							System.out.println(name+":"+value);
 						}
 						headerLine = reader.readLine();
 					}	
@@ -94,6 +92,10 @@ public class RequestHead {
 		} else {
 			return -1;
 		}
+	}
+
+	public boolean isChunked() {
+		return chunked;
 	}
 	
 	

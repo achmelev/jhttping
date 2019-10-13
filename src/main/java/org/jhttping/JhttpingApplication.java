@@ -2,24 +2,16 @@ package org.jhttping;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.PrintWriter;
 import java.net.InetAddress;
 import java.net.MalformedURLException;
 import java.net.Socket;
 import java.net.URL;
-import java.nio.ByteOrder;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
 
 import javax.management.RuntimeErrorException;
 
-import org.apache.http.message.BasicHeaderValueParser;
-import org.apache.http.message.BasicLineParser;
-import org.apache.http.message.HeaderValueParser;
-import org.apache.http.message.LineParser;
-import org.apache.http.message.ParserCursor;
-import org.apache.http.util.CharArrayBuffer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
@@ -30,6 +22,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 public class JhttpingApplication implements CommandLineRunner {
 	
 	private static Logger log = LoggerFactory.getLogger(JhttpingApplication.class);
+	private Socket socket = null;
 	
 	public static void main(String[] args) {
 		SpringApplication.run(JhttpingApplication.class, args);
@@ -106,7 +99,10 @@ public class JhttpingApplication implements CommandLineRunner {
 			int headEndPos = -1;
 			
 			long t1 = System.currentTimeMillis();
-			Socket socket = new Socket(address, port);
+			if (socket == null || socket.isClosed()) {
+				socket = new Socket(address, port);
+			}
+			
 			long connectTime = System.currentTimeMillis()-t1;
 			
 			long t2 = System.currentTimeMillis();
@@ -132,6 +128,9 @@ public class JhttpingApplication implements CommandLineRunner {
 			dump(data, data.length);
 			
 			RequestHead head = new RequestHead(data, data.length, headEndPos+2);
+			if (head.isChunked()) {
+				throw new RuntimeException("Chunked responses not supported yet!");
+			}
 			ByteArrayOutputStream body = new ByteArrayOutputStream();
 			if (head.getBody() != null) {
 				body.write(head.getBody(), 0, head.getBody().length);
@@ -150,7 +149,7 @@ public class JhttpingApplication implements CommandLineRunner {
 			}	
 			long readTime = System.currentTimeMillis()-t4;
 				
-			socket.close();
+			//socket.close();
 			log.info("connected to "+address.getHostName()+":"+port+" connect time = "+connectTime+", writeTime = "+writeTime+", waitTime = "+waitTime+",readTime = "+readTime+",totalTime = "+(connectTime+writeTime+waitTime+readTime)+", response code = "+head.getResponseCode());
 			
 		} catch (IOException e) {
