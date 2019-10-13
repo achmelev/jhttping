@@ -7,11 +7,19 @@ import java.net.InetAddress;
 import java.net.MalformedURLException;
 import java.net.Socket;
 import java.net.URL;
+import java.nio.ByteOrder;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
 
 import javax.management.RuntimeErrorException;
 
+import org.apache.http.message.BasicHeaderValueParser;
+import org.apache.http.message.BasicLineParser;
+import org.apache.http.message.HeaderValueParser;
+import org.apache.http.message.LineParser;
+import org.apache.http.message.ParserCursor;
+import org.apache.http.util.CharArrayBuffer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
@@ -36,7 +44,7 @@ public class JhttpingApplication implements CommandLineRunner {
         }
     }
 	
-	private String createHttpRequest(String host, String uri,String method, List<Header> headers) {
+	private String createHttpRequestHead(String host, String uri,String method, List<Header> headers) {
 		StringBuilder builder = new StringBuilder();
 		builder.append(method+" "+uri+" HTTP/1.1\r\n");
 		for (Header hd: headers) {
@@ -63,13 +71,13 @@ public class JhttpingApplication implements CommandLineRunner {
 				List<Header> headers = new ArrayList<Header>();
 				headers.add(new Header("Host",host));
 				headers.add(new Header("Connection","keep-alive"));
-				String request = createHttpRequest(host, path, "GET", headers);
+				String requestHead = createHttpRequestHead(host, path, "GET", headers);
 				if (port <= 0) {
 					port = 80;
 				}
 				log.info("PING "+inetAdress .getHostAddress()+":"+port+"("+path+")");
 				while (true) {
-					ping(inetAdress,port,request);
+					ping(inetAdress,port,requestHead);
 					Thread.currentThread().sleep(3000);
 				}
 			} else {
@@ -90,26 +98,78 @@ public class JhttpingApplication implements CommandLineRunner {
 		log.info(new String(out.toByteArray()));
 	}
 	
-	private void ping(InetAddress address, int port, String request) {
+	private void ping(InetAddress address, int port, String requestHead) {
 		try {
 			
 			byte [] buf = new byte[1024]; 
+			ByteArrayOutputStream out = new ByteArrayOutputStream();
+			int headEndPos = -1;
+			
 			long t1 = System.currentTimeMillis();
 			Socket socket = new Socket(address, port);
 			long connectTime = System.currentTimeMillis()-t1;
+			
 			long t2 = System.currentTimeMillis();
-			dump(request.getBytes(), request.getBytes().length);
-			socket.getOutputStream().write(request.getBytes());
+			byte [] requestHeadBytes = requestHead.getBytes(Charset.forName("ISO-8859-1"));
+			socket.getOutputStream().write(requestHeadBytes);
 			long writeTime = System.currentTimeMillis()-t2;
+			
 			long t3 = System.currentTimeMillis();
-			int read = socket.getInputStream().read(buf);
+			int read = readNextPart(out, buf, socket);
 			long waitTime = System.currentTimeMillis()-t3;
+			
+			if (read > 0) {
+				headEndPos = findEmptyLine(out.toByteArray());
+			}
+			while (headEndPos<0) {
+				read = socket.getInputStream().read(buf);
+				read = readNextPart(out, buf, socket);
+				if (read > 0) {
+					headEndPos = findEmptyLine(out.toByteArray());
+				}
+			}
+			byte [] data = out.toByteArray();
+			dump(data, data.length);
+			
+			RequestHead head = new RequestHead(data, data.length, headEndPos+2);
+			ByteArrayOutputStream body = new ByteArrayOutputStream();
+			if (head.getBody() != null) {
+				body.write(head.getBody(), 0, head.getBody().length);
+			}
+			
+			long t4 = System.currentTimeMillis();
+			if (head.getContentLength() < 0) {
+			   	read = readNextPart(out, buf, socket);
+			   	while (read>=0) {
+			   		read = readNextPart(out, buf, socket);
+			   	}
+			} else {
+				while (body.size() < head.getContentLength()) {
+					readNextPart(body, buf, socket);
+				}
+			}	
+			long readTime = System.currentTimeMillis()-t4;
+				
 			socket.close();
-			log.info("connected to "+address.getHostName()+":"+port+" connect time = "+connectTime+", writeTime = "+writeTime+", waitTime = "+waitTime+", totalTime = "+(connectTime+writeTime+waitTime));
+			log.info("connected to "+address.getHostName()+":"+port+" connect time = "+connectTime+", writeTime = "+writeTime+", waitTime = "+waitTime+",readTime = "+readTime+",totalTime = "+(connectTime+writeTime+waitTime+readTime)+", response code = "+head.getResponseCode());
 			
 		} catch (IOException e) {
 			throw new RuntimeException("Ping error",e);
 		}
+	}
+	
+	private int readNextPart(ByteArrayOutputStream out, byte[] buf, Socket socket) throws IOException{
+		int read = socket.getInputStream().read(buf);
+		if (read > 0) {
+			out.write(buf, 0, read);
+		}	
+		return read;
+	}
+	
+	private int findEmptyLine(byte [] buf) {
+		String str = new String(buf, Charset.forName("ISO-8859-1"));
+		int index = str.indexOf("\r\n\r\n");
+		return index;
 	}
 	
 	
