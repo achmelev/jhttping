@@ -32,7 +32,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 @SpringBootApplication
 public class JhttpingApplication implements CommandLineRunner {
 	
-	private static Logger log = LoggerFactory.getLogger(JhttpingApplication.class);
+	private static Logger log = LoggerFactory.getLogger("jhttping");
 	private Socket socket = null;
 	
 	private int pingInterval = 3;
