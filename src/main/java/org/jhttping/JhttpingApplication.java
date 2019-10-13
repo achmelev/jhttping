@@ -7,6 +7,8 @@ import java.io.InputStream;
 import java.net.InetAddress;
 import java.net.MalformedURLException;
 import java.net.Socket;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
@@ -40,6 +42,16 @@ public class JhttpingApplication implements CommandLineRunner {
         }
     }
 	
+	private boolean isValidURI(String uriStr) {
+	    try {
+	      URI uri = new URI(uriStr);
+	      return true;
+	    }
+	    catch (URISyntaxException e) {
+	        return false;
+	    }
+	}
+	
 	private String createHttpRequestHead(String host, String uri,String method, List<Header> headers) {
 		StringBuilder builder = new StringBuilder();
 		builder.append(method+" "+uri+" HTTP/1.1\r\n");
@@ -62,6 +74,9 @@ public class JhttpingApplication implements CommandLineRunner {
 			String host = url.getHost();
 			int port = url.getPort();
 			String path = url.getPath();
+			if (path.length() == 0) {
+				path = "/";
+			}
 			if (protocol.equals("http")) {
 				InetAddress inetAdress = InetAddress.getByName(host);
 				List<Header> headers = new ArrayList<Header>();
@@ -88,11 +103,6 @@ public class JhttpingApplication implements CommandLineRunner {
 		}
 	}
 	
-	private void dump(byte [] bytes, int length) {
-		ByteArrayOutputStream out = new ByteArrayOutputStream();
-		out.write(bytes,0,length);
-		log.info(new String(out.toByteArray()));
-	}
 	
 	private void ping(InetAddress address, int port, String requestHead) {
 		try {
@@ -211,6 +221,12 @@ public class JhttpingApplication implements CommandLineRunner {
 		String str = new String(buf, Charset.forName("ISO-8859-1"));
 		int index = str.indexOf("\r\n\r\n");
 		return index;
+	}
+	
+	private void dump(byte [] bytes, int length) {
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+		out.write(bytes,0,length);
+		log.info(new String(out.toByteArray()));
 	}
 	
 	
