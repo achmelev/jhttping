@@ -1,7 +1,9 @@
 package org.jhttping;
 
+import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.InetAddress;
 import java.net.MalformedURLException;
 import java.net.Socket;
@@ -10,8 +12,9 @@ import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
 
-import javax.management.RuntimeErrorException;
-
+import org.apache.http.impl.io.ChunkedInputStream;
+import org.apache.http.impl.io.HttpTransportMetricsImpl;
+import org.apache.http.impl.io.SessionInputBufferImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
@@ -94,7 +97,14 @@ public class JhttpingApplication implements CommandLineRunner {
 	private void ping(InetAddress address, int port, String requestHead) {
 		try {
 			
-			byte [] buf = new byte[1024]; 
+			int headReadLimit = 4096;
+			int bufSize = 1024; 
+			
+			int headerBytes = 0;
+			int bodyBytes = 0;
+			int totalBytes = 0;
+			
+			byte [] buf = new byte[bufSize]; 
 			ByteArrayOutputStream out = new ByteArrayOutputStream();
 			int headEndPos = -1;
 			
@@ -110,55 +120,87 @@ public class JhttpingApplication implements CommandLineRunner {
 			socket.getOutputStream().write(requestHeadBytes);
 			long writeTime = System.currentTimeMillis()-t2;
 			
+			BufferedInputStream input = new BufferedInputStream(socket.getInputStream());
+			input.mark(headReadLimit);
+			
 			long t3 = System.currentTimeMillis();
-			int read = readNextPart(out, buf, socket);
+			int read = readNextPart(out, buf, input);
 			long waitTime = System.currentTimeMillis()-t3;
 			
 			if (read > 0) {
 				headEndPos = findEmptyLine(out.toByteArray());
 			}
 			while (headEndPos<0) {
-				read = socket.getInputStream().read(buf);
-				read = readNextPart(out, buf, socket);
+				read = readNextPart(out, buf, input);
 				if (read > 0) {
 					headEndPos = findEmptyLine(out.toByteArray());
 				}
 			}
-			byte [] data = out.toByteArray();
-			dump(data, data.length);
 			
+			//reset
+			byte [] data = out.toByteArray();
 			RequestHead head = new RequestHead(data, data.length, headEndPos+2);
-			if (head.isChunked()) {
-				throw new RuntimeException("Chunked responses not supported yet!");
-			}
-			ByteArrayOutputStream body = new ByteArrayOutputStream();
-			if (head.getBody() != null) {
-				body.write(head.getBody(), 0, head.getBody().length);
-			}
 			
 			long t4 = System.currentTimeMillis();
-			if (head.getContentLength() < 0) {
-			   	read = readNextPart(out, buf, socket);
-			   	while (read>=0) {
-			   		read = readNextPart(out, buf, socket);
-			   	}
+			if (head.isChunked()) {
+				bodyBytes = (int)readChunkedBody(input, headEndPos, bufSize);
 			} else {
-				while (body.size() < head.getContentLength()) {
-					readNextPart(body, buf, socket);
-				}
-			}	
+				bodyBytes= readBody(head, input, buf);
+			}
+			headerBytes = headEndPos+4;
+			totalBytes = headerBytes+bodyBytes;
+			
 			long readTime = System.currentTimeMillis()-t4;
 				
 			//socket.close();
-			log.info("connected to "+address.getHostName()+":"+port+" connect time = "+connectTime+", writeTime = "+writeTime+", waitTime = "+waitTime+",readTime = "+readTime+",totalTime = "+(connectTime+writeTime+waitTime+readTime)+", response code = "+head.getResponseCode());
+			log.info("connected to "+address.getHostName()+":"+port+" connect time = "+connectTime+", writeTime = "+writeTime+", waitTime = "+waitTime+", readTime = "+readTime+", totalTime = "+(connectTime+writeTime+waitTime+readTime)+", header size = "+headerBytes+", body size = "+bodyBytes+", total size = "+totalBytes+", response code = "+head.getResponseCode());
 			
 		} catch (IOException e) {
 			throw new RuntimeException("Ping error",e);
 		}
 	}
 	
-	private int readNextPart(ByteArrayOutputStream out, byte[] buf, Socket socket) throws IOException{
-		int read = socket.getInputStream().read(buf);
+	private int readBody(RequestHead head, InputStream input, byte [] buf) throws IOException {
+		if (head.getContentLength() == 0) {
+			return 0;
+		}
+		ByteArrayOutputStream body = new ByteArrayOutputStream();
+		if (head.getBody() != null) {
+			body.write(head.getBody(), 0, head.getBody().length);
+		}
+		
+		int read;
+		if (head.getContentLength() < 0) {
+		   	read = readNextPart(body, buf, input);
+		   	while (read>=0) {
+		   		read = readNextPart(body, buf, input);
+		   	}
+		} else {
+			while (body.size() < head.getContentLength()) {
+				read = readNextPart(body, buf, input);
+			}	
+		}	
+		
+		return body.size();
+	}
+	
+	private long readChunkedBody(InputStream input, int headEndPos, int bufSize) throws IOException {
+		input.reset();
+		byte[] rereadBuf = new byte[headEndPos+4];
+		int read = input.read(rereadBuf);
+		if (read != headEndPos+4) {
+			throw new IOException("reread failed!");
+		}
+		HttpTransportMetricsImpl metric = new HttpTransportMetricsImpl();
+		SessionInputBufferImpl sessionInputBuffer = new SessionInputBufferImpl(metric, bufSize);
+		sessionInputBuffer.bind(input);
+		ChunkedInputStream cinput = new ChunkedInputStream(sessionInputBuffer);
+		cinput.close();
+		return metric.getBytesTransferred();
+	}
+	
+	private int readNextPart(ByteArrayOutputStream out, byte[] buf, InputStream input) throws IOException{
+		int read = input.read(buf);
 		if (read > 0) {
 			out.write(buf, 0, read);
 		}	
