@@ -14,7 +14,6 @@ import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
 
-import javax.net.SocketFactory;
 import javax.net.ssl.SNIHostName;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocket;
@@ -177,7 +176,7 @@ public class JhttpingApplication implements CommandLineRunner {
 			long readTime = System.currentTimeMillis()-t4;
 				
 			//socket.close();
-			log.info("connected to "+address.getHostName()+":"+port+" connect time = "+connectTime+", writeTime = "+writeTime+", waitTime = "+waitTime+", readTime = "+readTime+", totalTime = "+(connectTime+writeTime+waitTime+readTime)+", header size = "+headerBytes+", body size = "+bodyBytes+", total size = "+totalBytes+", response code = "+head.getResponseCode());
+			log.info("connected to "+address.getHostName()+":"+port+" connect time = "+connectTime+", write time = "+writeTime+", wait time = "+waitTime+", read time = "+readTime+", total time = "+(connectTime+writeTime+waitTime+readTime)+", header size = "+headerBytes+", body size = "+bodyBytes+", total size = "+totalBytes+", status code = "+head.getResponseCode());
 			
 		} catch (IOException e) {
 			log.error(e.getMessage());
