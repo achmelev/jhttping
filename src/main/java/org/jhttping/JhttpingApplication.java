@@ -74,6 +74,7 @@ public class JhttpingApplication implements CommandLineRunner {
 			String host = url.getHost();
 			int port = url.getPort();
 			String path = url.getPath();
+			String query = url.getQuery();
 			if (path.length() == 0) {
 				path = "/";
 			}
@@ -82,11 +83,12 @@ public class JhttpingApplication implements CommandLineRunner {
 				List<Header> headers = new ArrayList<Header>();
 				headers.add(new Header("Host",host));
 				headers.add(new Header("Connection","keep-alive"));
-				String requestHead = createHttpRequestHead(host, path, "GET", headers);
+				String pathAndQuery =  path+((query == null)?"":"?"+query); 
+				String requestHead = createHttpRequestHead(host,pathAndQuery, "GET", headers);
 				if (port <= 0) {
 					port = 80;
 				}
-				log.info("PING "+inetAdress .getHostAddress()+":"+port+"("+path+")");
+				log.info("PING "+inetAdress .getHostAddress()+":"+port+"("+pathAndQuery+")");
 				while (true) {
 					ping(inetAdress,port,requestHead);
 					Thread.currentThread().sleep(3000);
