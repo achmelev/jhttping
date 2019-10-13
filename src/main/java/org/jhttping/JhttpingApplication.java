@@ -14,6 +14,12 @@ import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
 
+import javax.net.SocketFactory;
+import javax.net.ssl.SNIHostName;
+import javax.net.ssl.SSLParameters;
+import javax.net.ssl.SSLSocket;
+import javax.net.ssl.SSLSocketFactory;
+
 import org.apache.http.impl.io.ChunkedInputStream;
 import org.apache.http.impl.io.HttpTransportMetricsImpl;
 import org.apache.http.impl.io.SessionInputBufferImpl;
@@ -28,6 +34,10 @@ public class JhttpingApplication implements CommandLineRunner {
 	
 	private static Logger log = LoggerFactory.getLogger(JhttpingApplication.class);
 	private Socket socket = null;
+	
+	private int pingInterval = 3;
+	private int bufSize = 10240;
+	private int headReadLimit = 4096;
 	
 	public static void main(String[] args) {
 		SpringApplication.run(JhttpingApplication.class, args);
@@ -78,7 +88,7 @@ public class JhttpingApplication implements CommandLineRunner {
 			if (path.length() == 0) {
 				path = "/";
 			}
-			if (protocol.equals("http")) {
+			if (protocol.equals("http") || protocol.equals("https")) {
 				InetAddress inetAdress = InetAddress.getByName(host);
 				List<Header> headers = new ArrayList<Header>();
 				headers.add(new Header("Host",host));
@@ -86,12 +96,16 @@ public class JhttpingApplication implements CommandLineRunner {
 				String pathAndQuery =  path+((query == null)?"":"?"+query); 
 				String requestHead = createHttpRequestHead(host,pathAndQuery, "GET", headers);
 				if (port <= 0) {
-					port = 80;
-				}
-				log.info("PING "+inetAdress .getHostAddress()+":"+port+"("+pathAndQuery+")");
+					if (protocol.equals("http")) {
+						port = 80;
+					} else {
+						port = 443;
+					}
+				} 
+				log.info("PING "+inetAdress.getHostAddress()+":"+port+"("+pathAndQuery+")");
 				while (true) {
-					ping(inetAdress,port,requestHead);
-					Thread.currentThread().sleep(3000);
+					ping(host, inetAdress,port,requestHead, protocol.equals("https"));
+					Thread.currentThread().sleep(pingInterval*1000);
 				}
 			} else {
 				log.error("Unsupported url protocol: "+protocol);
@@ -106,11 +120,8 @@ public class JhttpingApplication implements CommandLineRunner {
 	}
 	
 	
-	private void ping(InetAddress address, int port, String requestHead) {
+	private void ping(String host, InetAddress address, int port, String requestHead, boolean ssl) {
 		try {
-			
-			int headReadLimit = 4096;
-			int bufSize = 1024; 
 			
 			int headerBytes = 0;
 			int bodyBytes = 0;
@@ -121,8 +132,8 @@ public class JhttpingApplication implements CommandLineRunner {
 			int headEndPos = -1;
 			
 			long t1 = System.currentTimeMillis();
-			if (socket == null || socket.isClosed()) {
-				socket = new Socket(address, port);
+			if (socket == null || socket.isClosed() ) {
+				connect(host, address, port, ssl);
 			}
 			
 			long connectTime = System.currentTimeMillis()-t1;
@@ -132,7 +143,7 @@ public class JhttpingApplication implements CommandLineRunner {
 			socket.getOutputStream().write(requestHeadBytes);
 			long writeTime = System.currentTimeMillis()-t2;
 			
-			BufferedInputStream input = new BufferedInputStream(socket.getInputStream());
+			BufferedInputStream input = new BufferedInputStream(socket.getInputStream(), bufSize);
 			input.mark(headReadLimit);
 			
 			long t3 = System.currentTimeMillis();
@@ -151,6 +162,7 @@ public class JhttpingApplication implements CommandLineRunner {
 			
 			//reset
 			byte [] data = out.toByteArray();
+			//dump(data, data.length);
 			RequestHead head = new RequestHead(data, data.length, headEndPos+2);
 			
 			long t4 = System.currentTimeMillis();
@@ -168,7 +180,25 @@ public class JhttpingApplication implements CommandLineRunner {
 			log.info("connected to "+address.getHostName()+":"+port+" connect time = "+connectTime+", writeTime = "+writeTime+", waitTime = "+waitTime+", readTime = "+readTime+", totalTime = "+(connectTime+writeTime+waitTime+readTime)+", header size = "+headerBytes+", body size = "+bodyBytes+", total size = "+totalBytes+", response code = "+head.getResponseCode());
 			
 		} catch (IOException e) {
-			throw new RuntimeException("Ping error",e);
+			log.error(e.getMessage());
+			socket = null;
+		}
+	}
+	
+	private void connect(String hostName, InetAddress address, int port, boolean ssl) throws IOException {
+		if (!ssl) {
+			socket = new Socket(address, port);
+		} else {
+			SSLSocketFactory sslsocketfactory = (SSLSocketFactory)SSLSocketFactory.getDefault();
+			SSLSocket sslSocket = (SSLSocket)sslsocketfactory.createSocket(address, port);
+			SSLParameters params = sslSocket.getSSLParameters();
+			List sniHostNames = new ArrayList(1);
+			sniHostNames.add(new SNIHostName(hostName));
+			params.setServerNames(sniHostNames);
+			sslSocket.setSSLParameters(params);
+			sslSocket.startHandshake();
+			socket = sslSocket;
+			
 		}
 	}
 	
