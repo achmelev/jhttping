@@ -26,6 +26,7 @@ import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.http.impl.io.ChunkedInputStream;
 import org.apache.http.impl.io.HttpTransportMetricsImpl;
 import org.apache.http.impl.io.SessionInputBufferImpl;
@@ -51,6 +52,11 @@ public class JhttpingApplication implements CommandLineRunner {
 	private int headReadLimit;
 	@Value("${count}")
 	private int maxCount;
+	@Value("${agent}")
+	private String agent;
+	@Value("${version}")
+	private String version;
+	
 	
 	private static Options options;
 	
@@ -112,7 +118,7 @@ public class JhttpingApplication implements CommandLineRunner {
 	@Override
     public void run(String... args) {
         if (log.isDebugEnabled()) {
-        	log.debug("Config values interval="+pingInterval+", bufsize="+bufSize+", headreadlimit="+headReadLimit+", count = "+maxCount);
+        	log.debug("Config values interval="+pingInterval+", bufsize="+bufSize+", headreadlimit="+headReadLimit+", count = "+maxCount+", version="+version);
         }
         doPings();
         
@@ -134,6 +140,19 @@ public class JhttpingApplication implements CommandLineRunner {
 		builder.append(hd.getName()+": "+hd.getValue()+"\r\n");
 	}
 	
+	private List<Header> createHeaders(URL url) {
+		String host = url.getHost();
+		List<Header> headers = new ArrayList<Header>();
+		headers.add(new Header("Host",host));
+		headers.add(new Header("Connection","keep-alive"));
+		if (StringUtils.isEmpty(agent)) {
+			headers.add(new Header("User-Agent","JHTTPing "+version));
+		} else {
+			headers.add(new Header("User-Agent",agent));
+		}
+		return headers;
+	}
+	
 	private void doPings() {
 		try {
 			URL url = new URL(urlStr);
@@ -147,11 +166,8 @@ public class JhttpingApplication implements CommandLineRunner {
 			}
 			if (protocol.equals("http") || protocol.equals("https")) {
 				InetAddress inetAdress = InetAddress.getByName(host);
-				List<Header> headers = new ArrayList<Header>();
-				headers.add(new Header("Host",host));
-				headers.add(new Header("Connection","keep-alive"));
 				String pathAndQuery =  path+((query == null)?"":"?"+query); 
-				String requestHead = createHttpRequestHead(host,pathAndQuery, "GET", headers);
+				String requestHead = createHttpRequestHead(host,pathAndQuery, "GET", createHeaders(url));
 				if (port <= 0) {
 					if (protocol.equals("http")) {
 						port = 80;
@@ -199,6 +215,9 @@ public class JhttpingApplication implements CommandLineRunner {
 			
 			long t2 = System.currentTimeMillis();
 			byte [] requestHeadBytes = requestHead.getBytes(Charset.forName("ISO-8859-1"));
+			if (log.isDebugEnabled()) {
+				dump(requestHeadBytes, requestHeadBytes.length);
+			}
 			socket.getOutputStream().write(requestHeadBytes);
 			long writeTime = System.currentTimeMillis()-t2;
 			
@@ -221,7 +240,7 @@ public class JhttpingApplication implements CommandLineRunner {
 			
 			//reset
 			byte [] data = out.toByteArray();
-			//dump(data, data.length);
+				
 			RequestHead head = new RequestHead(data, data.length, headEndPos+2);
 			
 			long t4 = System.currentTimeMillis();
