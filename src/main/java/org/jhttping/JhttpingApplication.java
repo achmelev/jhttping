@@ -43,9 +43,12 @@ public class JhttpingApplication implements CommandLineRunner {
 	private static Logger log = LoggerFactory.getLogger("jhttping");
 	private Socket socket = null;
 	
-	private int pingInterval = 3;
-	private int bufSize = 8192;
-	private int headReadLimit = 4096;
+	@Value("${interval}")
+	private int pingInterval;
+	@Value("${bufsize}")
+	private int bufSize;
+	@Value("${headreadlimit}")
+	private int headReadLimit;
 	
 	private static Options options;
 	
@@ -106,20 +109,13 @@ public class JhttpingApplication implements CommandLineRunner {
 	
 	@Override
     public void run(String... args) {
-        
+        if (log.isDebugEnabled()) {
+        	log.debug("Config values interval="+pingInterval+", bufsize="+bufSize+", headreadlimit="+headReadLimit);
+        }
         doPings();
         
     }
 	
-	private boolean isValidURI(String uriStr) {
-	    try {
-	      URI uri = new URI(uriStr);
-	      return true;
-	    }
-	    catch (URISyntaxException e) {
-	        return false;
-	    }
-	}
 	
 	private String createHttpRequestHead(String host, String uri,String method, List<Header> headers) {
 		StringBuilder builder = new StringBuilder();
