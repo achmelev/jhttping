@@ -49,6 +49,8 @@ public class JhttpingApplication implements CommandLineRunner {
 	private int bufSize;
 	@Value("${headreadlimit}")
 	private int headReadLimit;
+	@Value("${count}")
+	private int maxCount;
 	
 	private static Options options;
 	
@@ -110,7 +112,7 @@ public class JhttpingApplication implements CommandLineRunner {
 	@Override
     public void run(String... args) {
         if (log.isDebugEnabled()) {
-        	log.debug("Config values interval="+pingInterval+", bufsize="+bufSize+", headreadlimit="+headReadLimit);
+        	log.debug("Config values interval="+pingInterval+", bufsize="+bufSize+", headreadlimit="+headReadLimit+", count = "+maxCount);
         }
         doPings();
         
@@ -158,9 +160,11 @@ public class JhttpingApplication implements CommandLineRunner {
 					}
 				} 
 				log.info("PING "+inetAdress.getHostAddress()+":"+port+"("+pathAndQuery+")");
-				while (true) {
+				int counter = 0;
+				while (maxCount<=0 || (counter<maxCount)) {
 					ping(host, inetAdress,port,requestHead, protocol.equals("https"));
 					Thread.currentThread().sleep(pingInterval*1000);
+					counter++;
 				}
 			} else {
 				log.error("Unsupported url protocol: "+protocol);
