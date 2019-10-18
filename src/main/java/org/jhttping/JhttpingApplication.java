@@ -56,6 +56,8 @@ public class JhttpingApplication implements CommandLineRunner {
 	private String agent;
 	@Value("${version}")
 	private String version;
+	@Value("${method}")
+	private String method;
 	
 	
 	private static Options options;
@@ -117,8 +119,9 @@ public class JhttpingApplication implements CommandLineRunner {
 	
 	@Override
     public void run(String... args) {
+		
         if (log.isDebugEnabled()) {
-        	log.debug("Config values interval="+pingInterval+", bufsize="+bufSize+", headreadlimit="+headReadLimit+", count = "+maxCount+", version="+version);
+        	log.debug("Config values interval="+pingInterval+", bufsize="+bufSize+", headreadlimit="+headReadLimit+", count = "+maxCount+", version="+version+", method="+method);
         }
         doPings();
         
@@ -165,9 +168,13 @@ public class JhttpingApplication implements CommandLineRunner {
 				path = "/";
 			}
 			if (protocol.equals("http") || protocol.equals("https")) {
+				method = method.trim().toUpperCase();
+				if (!(method.equals("GET") || method.equals("POST") || method.equals("HEAD"))) {
+					throw new IllegalArgumentException("Method "+method+" not allowed");
+				}
 				InetAddress inetAdress = InetAddress.getByName(host);
 				String pathAndQuery =  path+((query == null)?"":"?"+query); 
-				String requestHead = createHttpRequestHead(host,pathAndQuery, "GET", createHeaders(url));
+				String requestHead = createHttpRequestHead(host,pathAndQuery, method, createHeaders(url));
 				if (port <= 0) {
 					if (protocol.equals("http")) {
 						port = 80;
@@ -189,6 +196,8 @@ public class JhttpingApplication implements CommandLineRunner {
 			
 		} catch (MalformedURLException e) {
 			log.error("Malformed url: "+urlStr);
+		} catch (IllegalArgumentException e) {
+			log.error(e.getMessage());
 		} catch (Throwable e) {
 			log.error("Failure",e);
 		}
@@ -280,7 +289,7 @@ public class JhttpingApplication implements CommandLineRunner {
 	}
 	
 	private int readBody(RequestHead head, InputStream input, byte [] buf) throws IOException {
-		if (head.getContentLength() == 0) {
+		if (head.getContentLength() == 0 || method.equals("HEAD")) {
 			return 0;
 		}
 		ByteArrayOutputStream body = new ByteArrayOutputStream();
