@@ -19,11 +19,20 @@ import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.CommandLineParser;
+import org.apache.commons.cli.DefaultParser;
+import org.apache.commons.cli.HelpFormatter;
+import org.apache.commons.cli.Option;
+import org.apache.commons.cli.Options;
+import org.apache.commons.cli.ParseException;
 import org.apache.http.impl.io.ChunkedInputStream;
 import org.apache.http.impl.io.HttpTransportMetricsImpl;
 import org.apache.http.impl.io.SessionInputBufferImpl;
+import org.apache.http.util.Args;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -35,20 +44,71 @@ public class JhttpingApplication implements CommandLineRunner {
 	private Socket socket = null;
 	
 	private int pingInterval = 3;
-	private int bufSize = 10240;
+	private int bufSize = 8192;
 	private int headReadLimit = 4096;
 	
+	private static Options options;
+	
+	@Value("${url}")
+	private String urlStr;
+		
 	public static void main(String[] args) {
-		SpringApplication.run(JhttpingApplication.class, args);
+		options = createOpts();
+		if (args.length == 0) {
+			usage();
+		} else {
+			CommandLineParser parser = new DefaultParser();
+			// parse the command line arguments
+		    try {
+				CommandLine line = parser.parse( options, args );
+				SpringApplication.run(JhttpingApplication.class, convertToSpringArgs(line));
+			} catch (Throwable e) {
+				log.error("Unexpected exception",e);
+				System.exit(1);
+			} finally {
+				System.exit(0);
+			}
+		}
 	}
+	
+	private static String [] convertToSpringArgs(CommandLine line) {
+		ArrayList<String> args = new ArrayList<String>();
+		for (Option o: options.getOptions()) {
+			if (line.hasOption(o.getOpt())) {
+				if (!o.hasArg()) {
+					args.add("--"+o.getLongOpt()+"=true");
+				} else {
+					args.add("--"+o.getLongOpt()+"="+line.getOptionValue(o.getOpt()));
+				}
+			}
+		}
+		return  args.toArray(new String[args.size()]);
+		
+	}
+	
+	private static Options createOpts() {
+		Options opts = new Options();
+		opts.addOption("g", "url", true,"This selects the url to probe. E.g.: http://localhost/");
+		opts.addOption("c", "count", true,"How many probes to send before exiting.");
+		opts.addOption("i", "interval", true,"How many seconds to sleep between every probe sent.");
+		opts.addOption("m", "method", true,"HTTP method to use. Allowed values: get, post, head. Default is get");
+		opts.addOption("I", "agent", true,"User-Agent to send to the server.(instead of 'JHTTPing <version>')");
+		opts.addOption("b", "bufsize", true,"Read buffer size to use. (in bytes, default is 8192)");
+		return opts;
+	}
+	
+	private static void usage() {
+		HelpFormatter formatter = new HelpFormatter();
+		formatter.printHelp( "java -jar jhttping-<version> [options]", options );
+		System.exit(0);
+	}
+	
 	
 	@Override
     public void run(String... args) {
-        if (args.length == 0) {
-        	log.error("Missing url argument");
-        } else {
-        	doPings(args[0]);
-        }
+        
+        doPings();
+        
     }
 	
 	private boolean isValidURI(String uriStr) {
@@ -76,7 +136,7 @@ public class JhttpingApplication implements CommandLineRunner {
 		builder.append(hd.getName()+": "+hd.getValue()+"\r\n");
 	}
 	
-	private void doPings(String urlStr) {
+	private void doPings() {
 		try {
 			URL url = new URL(urlStr);
 			String protocol = url.getProtocol();
@@ -172,7 +232,6 @@ public class JhttpingApplication implements CommandLineRunner {
 			}
 			headerBytes = headEndPos+4;
 			totalBytes = headerBytes+bodyBytes;
-			
 			long readTime = System.currentTimeMillis()-t4;
 				
 			//socket.close();
