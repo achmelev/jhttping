@@ -92,7 +92,7 @@ public class JhttpingApplication implements CommandLineRunner {
 		ArrayList<String> args = new ArrayList<String>();
 		for (Option o: options.getOptions()) {
 			if (line.hasOption(o.getOpt())) {
-				if (o.hasArg()) {
+				if (o.hasArg() && !o.hasArgs()) {
 					args.add("--"+o.getLongOpt()+"="+line.getOptionValue(o.getOpt()));
 				} else if (o.hasArgs()) {
 					String [] values = line.getOptionValues(o.getOpt());
