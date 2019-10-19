@@ -7,8 +7,6 @@ import java.io.InputStream;
 import java.net.InetAddress;
 import java.net.MalformedURLException;
 import java.net.Socket;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
@@ -25,12 +23,10 @@ import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
-import org.apache.commons.cli.ParseException;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.impl.io.ChunkedInputStream;
 import org.apache.http.impl.io.HttpTransportMetricsImpl;
 import org.apache.http.impl.io.SessionInputBufferImpl;
-import org.apache.http.util.Args;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -58,6 +54,8 @@ public class JhttpingApplication implements CommandLineRunner {
 	private String version;
 	@Value("${method}")
 	private String method;
+	@Value("#{'${headers}'.split('###')}")
+	private List<String> additionalHeaders;
 	
 	
 	private static Options options;
@@ -88,10 +86,22 @@ public class JhttpingApplication implements CommandLineRunner {
 		ArrayList<String> args = new ArrayList<String>();
 		for (Option o: options.getOptions()) {
 			if (line.hasOption(o.getOpt())) {
-				if (!o.hasArg()) {
-					args.add("--"+o.getLongOpt()+"=true");
-				} else {
+				if (o.hasArg()) {
 					args.add("--"+o.getLongOpt()+"="+line.getOptionValue(o.getOpt()));
+				} else if (o.hasArgs()) {
+					String [] values = line.getOptionValues(o.getOpt());
+					StringBuilder builder = new StringBuilder();
+					builder.append("--"+o.getLongOpt()+"=");
+					for (int i=0;i<values.length;i++) {
+						builder.append(values[i]);
+						if (i < values.length-1) {
+							builder.append("###");
+						}
+					}
+					args.add(builder.toString());
+					
+				} else {
+					args.add("--"+o.getLongOpt()+"=true");
 				}
 			}
 		}
@@ -107,6 +117,10 @@ public class JhttpingApplication implements CommandLineRunner {
 		opts.addOption("m", "method", true,"HTTP method to use. Allowed values: get, post, head. Default is get");
 		opts.addOption("I", "agent", true,"User-Agent to send to the server.(instead of 'JHTTPing <version>')");
 		opts.addOption("b", "bufsize", true,"Read buffer size to use. (in bytes, default is 8192)");
+		opts.addOption("H", "headers", true,"Headers lines to pass. Separate multiple values with a space");
+		Option headersOption = opts.getOption("H");
+		headersOption.setArgs(Option.UNLIMITED_VALUES);
+		
 		return opts;
 	}
 	
@@ -122,10 +136,29 @@ public class JhttpingApplication implements CommandLineRunner {
 		
         if (log.isDebugEnabled()) {
         	log.debug("Config values interval="+pingInterval+", bufsize="+bufSize+", headreadlimit="+headReadLimit+", count = "+maxCount+", version="+version+", method="+method);
+        	if (additionalHeaders.size() > 0) {
+        		log.debug("additional headers:");
+        		for (String h: getNonEmptyAdditionalHeaders()) {
+        			log.debug(h);
+        		}
+        	}	
+        	
         }
         doPings();
         
     }
+	
+	private List<String> getNonEmptyAdditionalHeaders() {
+		List<String> result = new ArrayList<String>();
+		if (additionalHeaders != null) {
+			for (String s: additionalHeaders) {
+				if (!StringUtils.isBlank(s)) {
+					result.add(s);
+				}
+			}
+		}
+		return result;
+	}
 	
 	
 	private String createHttpRequestHead(String host, String uri,String method, List<Header> headers) {
@@ -146,6 +179,7 @@ public class JhttpingApplication implements CommandLineRunner {
 	private List<Header> createHeaders(URL url) {
 		String host = url.getHost();
 		List<Header> headers = new ArrayList<Header>();
+
 		headers.add(new Header("Host",host));
 		headers.add(new Header("Connection","keep-alive"));
 		if (StringUtils.isEmpty(agent)) {
@@ -153,8 +187,26 @@ public class JhttpingApplication implements CommandLineRunner {
 		} else {
 			headers.add(new Header("User-Agent",agent));
 		}
+		for (String s: getNonEmptyAdditionalHeaders()) {
+			String headerLine = s;
+			String [] values = headerLine.split(":");
+			if (values.length == 2) {
+				String name = values[0].trim();
+				String value = values[1];
+				if (!StringUtils.isEmpty(name)) {
+					headers.add(new Header(name,value));
+				} else {
+					log.error("malformed header line: "+headerLine);
+				}
+				
+			} else {
+				log.error("malformed header line: "+headerLine);
+			}
+		}
 		return headers;
 	}
+	
+	
 	
 	private void doPings() {
 		try {
