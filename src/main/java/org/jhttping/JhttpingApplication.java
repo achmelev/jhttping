@@ -316,11 +316,18 @@ public class JhttpingApplication implements CommandLineRunner {
 	
 	
 	private void ping(String host, InetAddress address, int port, byte[] requestBytes, boolean ssl) {
+		
+		int headerBytes = -1;
+		int bodyBytes = -1;
+		int totalBytes = -1;
+		long connectTime = -1;
+		long writeTime = -1;
+		long waitTime = -1;
+		long readTime = -1;
+		long totalTime = -1;
+		int responseCode = -1;
+		
 		try {
-			
-			int headerBytes = 0;
-			int bodyBytes = 0;
-			int totalBytes = 0;
 			
 			byte [] buf = new byte[bufSize]; 
 			ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -330,18 +337,18 @@ public class JhttpingApplication implements CommandLineRunner {
 			if (socket == null || socket.isClosed() ) {
 				connect(host, address, port, ssl);
 			}
-			long connectTime = System.currentTimeMillis()-t1;
+			connectTime = System.currentTimeMillis()-t1;
 			
 			long t2 = System.currentTimeMillis();
 			socket.getOutputStream().write(requestBytes);
-			long writeTime = System.currentTimeMillis()-t2;
+			writeTime = System.currentTimeMillis()-t2;
 			
 			BufferedInputStream input = new BufferedInputStream(socket.getInputStream(), bufSize);
 			input.mark(headReadLimit);
 			
 			long t3 = System.currentTimeMillis();
 			int read = readNextPart(out, buf, input);
-			long waitTime = System.currentTimeMillis()-t3;
+			waitTime = System.currentTimeMillis()-t3;
 			
 			if (read > 0) {
 				headEndPos = findEmptyLine(out.toByteArray());
@@ -352,11 +359,12 @@ public class JhttpingApplication implements CommandLineRunner {
 					headEndPos = findEmptyLine(out.toByteArray());
 				}
 			}
-			
+			headerBytes = headEndPos+4;
 			//reset
 			byte [] data = out.toByteArray();
 				
 			RequestHead head = new RequestHead(data, data.length, headEndPos+2);
+			responseCode = head.getResponseCode();
 			
 			long t4 = System.currentTimeMillis();
 			if (head.isChunked()) {
@@ -364,17 +372,29 @@ public class JhttpingApplication implements CommandLineRunner {
 			} else {
 				bodyBytes= readBody(head, input, buf);
 			}
-			headerBytes = headEndPos+4;
 			totalBytes = headerBytes+bodyBytes;
-			long readTime = System.currentTimeMillis()-t4;
-				
-			//socket.close();
-			log.info("connected to "+address.getHostName()+":"+port+" connect time = "+connectTime+", write time = "+writeTime+", wait time = "+waitTime+", read time = "+readTime+", total time = "+(connectTime+writeTime+waitTime+readTime)+", header size = "+headerBytes+", body size = "+bodyBytes+", total size = "+totalBytes+", status code = "+head.getResponseCode());
+			readTime = System.currentTimeMillis()-t4;
+			totalTime = (connectTime+writeTime+waitTime+readTime);
+			
+			if (head.isConnectionClosed()) {	
+				try {
+					socket.close();
+				} catch (IOException e) {
+					
+				} finally {
+					socket = null;
+				}
+			}	
+			
 			
 		} catch (IOException e) {
 			log.error(e.getMessage());
 			socket = null;
-		} 
+		} finally {
+			if (connectTime >0) {
+				log.info("connected to "+address.getHostName()+":"+port+" connect time = "+connectTime+", write time = "+writeTime+", wait time = "+waitTime+", read time = "+readTime+", total time = "+totalTime+", header size = "+headerBytes+", body size = "+bodyBytes+", total size = "+totalBytes+", status code = "+responseCode);
+			}	
+		}
 	}
 	
 	private void connect(String hostName, InetAddress address, int port, boolean ssl) throws IOException {
@@ -404,16 +424,20 @@ public class JhttpingApplication implements CommandLineRunner {
 		}
 		
 		int read;
-		if (head.getContentLength() < 0) {
-		   	read = readNextPart(body, buf, input);
-		   	while (read>=0) {
-		   		read = readNextPart(body, buf, input);
-		   	}
-		} else {
-			while (body.size() < head.getContentLength()) {
-				read = readNextPart(body, buf, input);
+		try {
+			if (head.getContentLength() < 0) {
+			   	read = readNextPart(body, buf, input);
+			   	while (read>=0) {
+			   		read = readNextPart(body, buf, input);
+			   	}
+			} else {
+				while (body.size() < head.getContentLength()) {
+					read = readNextPart(body, buf, input);
+				}	
 			}	
-		}	
+		} catch (NoMoreDataException e) {
+			//ignore
+		}
 		
 		return body.size();
 	}
@@ -442,7 +466,7 @@ public class JhttpingApplication implements CommandLineRunner {
 			out.write(buf, 0, read);
 		}	
 		if (read < 0) {
-			throw new IOException("connection closed by remote host");
+			throw new NoMoreDataException();
 		}
 		return read;
 	}

@@ -18,6 +18,7 @@ public class RequestHead {
 	private boolean chunked = false;
 	private boolean malformed = false;
 	private byte[] body = null;
+	private boolean connectionClosed = false; 
 	
 	private static LineParser statusLineParser = new BasicLineParser();
 	
@@ -40,6 +41,8 @@ public class RequestHead {
 								contentLengthValue = Integer.parseInt(value);
 							} else if (name.endsWith("Transfer-Encoding")) {
 								chunked = value.equals("chunked");
+							} else if (name.endsWith("Connection")) {
+								connectionClosed = value.equals("close");
 							}
 						}
 						headerLine = reader.readLine();
@@ -96,6 +99,10 @@ public class RequestHead {
 
 	public boolean isChunked() {
 		return chunked;
+	}
+
+	public boolean isConnectionClosed() {
+		return connectionClosed;
 	}
 	
 	
