@@ -123,8 +123,8 @@ public class JhttpingApplication implements CommandLineRunner {
 		opts.addOption("m", "method", true,"HTTP method to use. Allowed values: GET, POST, HEAD. Default is GET");
 		opts.addOption("I", "agent", true,"User-Agent to send to the server.(instead of 'JHTTPing <version>')");
 		opts.addOption("b", "bufsize", true,"Read buffer size to use. (in bytes, default is 8192)");
-		opts.addOption("H", "headers", true,"Headers lines to send. Separate multiple values with a space");
-		opts.addOption("d", "data", true,"Request body to send. Will be ignored for methods others as POST");
+		opts.addOption("H", "headers", true,"Header lines to send. Separate multiple values with a space");
+		opts.addOption("d", "data", true,"Request body to send (only for POST requests)");
 		Option headersOption = opts.getOption("H");
 		headersOption.setArgs(Option.UNLIMITED_VALUES);
 		
