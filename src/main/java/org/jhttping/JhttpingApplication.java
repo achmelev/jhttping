@@ -394,9 +394,7 @@ public class JhttpingApplication implements CommandLineRunner {
 	}
 	
 	private void dump(byte [] bytes, int length) {
-		ByteArrayOutputStream out = new ByteArrayOutputStream();
-		out.write(bytes,0,length);
-		log.info(new String(out.toByteArray()));
+		System.out.write(bytes, 0, length);
 	}
 	
 	
