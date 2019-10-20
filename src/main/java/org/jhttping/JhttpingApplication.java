@@ -23,7 +23,6 @@ import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.HelpFormatter;
-import org.apache.commons.cli.MissingArgumentException;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.lang3.StringUtils;
@@ -39,7 +38,6 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.LoggerContext;
 
 @SpringBootApplication
 public class JhttpingApplication implements CommandLineRunner {
@@ -85,7 +83,9 @@ public class JhttpingApplication implements CommandLineRunner {
 			// parse the command line arguments
 		    try {
 				CommandLine line = parser.parse( options, args );
-				if (line.hasOption("v")) {
+				if (line.hasOption("V")) {
+					verbosityLevel = 2;
+				} else if (line.hasOption("v")) {
 					verbosityLevel = 1;
 				}
 				SpringApplication.run(JhttpingApplication.class, convertToSpringArgs(line));
@@ -138,6 +138,7 @@ public class JhttpingApplication implements CommandLineRunner {
 		opts.addOption("H", "headers", true,"Header lines to send. Separate multiple values with a space");
 		opts.addOption("d", "data", true,"Request body to send (only for POST requests)");
 		opts.addOption("v", "verbose", false,"Print debug messages");
+		opts.addOption("V", "trc", false,"Print debug messages and trace the sent and received bytes");
 		Option headersOption = opts.getOption("H");
 		headersOption.setArgs(Option.UNLIMITED_VALUES);
 		
@@ -287,11 +288,11 @@ public class JhttpingApplication implements CommandLineRunner {
 				int counter = 0;
 				
 				byte [] requestBytes = createRequestBytes(requestHead);
-				/**if (log.isDebugEnabled()) {
-					log.debug("###REQUEST BEGIN###");
+				if (verbosityLevel > 1) {
+					log.info("###REQUEST BEGIN###");
 					dump(requestBytes, requestBytes.length);
-					log.debug("###REQUEST END#####");
-				}**/
+					log.info("###REQUEST END#####");
+				}
 				while (maxCount<=0 || (counter<maxCount)) {
 					ping(host, inetAdress,port,requestBytes, protocol.equals("https"));
 					try {
@@ -477,9 +478,11 @@ public class JhttpingApplication implements CommandLineRunner {
 	private int readNextPart(ByteArrayOutputStream out, byte[] buf, InputStream input) throws IOException{
 		int read = input.read(buf);
 		if (read > 0) {
-			/**if (log.isDebugEnabled()) {
+			if (verbosityLevel > 1) {
+				log.info("##############Server data##############");
 				dump(buf, read);
-			}**/
+				log.info("##############Server data end##############");
+			}
 			out.write(buf, 0, read);
 		}	
 		if (read < 0) {
@@ -502,8 +505,50 @@ public class JhttpingApplication implements CommandLineRunner {
 	}
 	
 	private void dump(byte [] bytes, int length) {
-		System.out.write(bytes, 0, length);
+		byte[] printableData = convertToPrintable(bytes, length);
+		String str = new String(printableData);
+		if (str.endsWith("\n")) {
+			str = str.substring(0,str.length()-1);
+		}
+		log.info(str);
 	}
+	
+	private byte [] convertToPrintable(byte [] data, int length) {
+		ByteArrayOutputStream baos = new ByteArrayOutputStream();
+		for (int i=0;i<length; i++) {
+			byte b = data[i];
+			if ((b<0x20 && b!=0xA && b!=0xD && b!=0x9) || (b>0x7E && b<0xA0)) {
+				baos.write(0x3c);
+				try {
+					int in = (b<0?(0x100+b):b);
+					baos.write(Integer.toHexString(in).getBytes());
+				} catch (IOException e) {
+					log.error(e.getMessage());
+				}
+				baos.write(0x3c);
+			} else {
+				if (b==0xA) {
+					try {
+						baos.write("<LF>\n".getBytes());
+					} catch (IOException e) {
+						log.error(e.getMessage());
+					}
+				} else if (b==0xD) {
+					try {
+						baos.write("<CR>".getBytes());
+					} catch (IOException e) {
+						log.error(e.getMessage());
+					}
+				} else {
+					baos.write(b);
+				}
+				
+			}
+		}
+		return baos.toByteArray();
+		
+	}
+
 	
 	
 
