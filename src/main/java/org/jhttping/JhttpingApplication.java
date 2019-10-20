@@ -40,7 +40,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 @SpringBootApplication
 public class JhttpingApplication implements CommandLineRunner {
 	
-	private static Logger log = LoggerFactory.getLogger("jhttping");
+	private static Logger log = LoggerFactory.getLogger("jhttping_output");
+	private static Logger log_msg = LoggerFactory.getLogger("jhttping_msg");
 	private Socket socket = null;
 	
 	@Value("${interval}")
@@ -80,7 +81,7 @@ public class JhttpingApplication implements CommandLineRunner {
 				CommandLine line = parser.parse( options, args );
 				SpringApplication.run(JhttpingApplication.class, convertToSpringArgs(line));
 			} catch (Throwable e) {
-				log.error("Unexpected exception",e);
+				log_msg.error("Unexpected exception",e);
 				System.exit(1);
 			} finally {
 				System.exit(0);
@@ -140,8 +141,8 @@ public class JhttpingApplication implements CommandLineRunner {
 	@Override
     public void run(String... args) {
 		
-        if (log.isDebugEnabled()) {
-        	log.debug("Config values interval="+pingInterval+", bufsize="+bufSize+", headreadlimit="+headReadLimit+", count = "+maxCount+", version="+version+", method="+method);
+        if (log_msg.isDebugEnabled()) {
+        	log_msg.debug("Config values interval="+pingInterval+", bufsize="+bufSize+", headreadlimit="+headReadLimit+", count = "+maxCount+", version="+version+", method="+method);
         }
         doPings();
         
@@ -195,15 +196,15 @@ public class JhttpingApplication implements CommandLineRunner {
 							ContentType contentType = ContentType.parse(v);
 							dataCharset = contentType.getCharset();
 						} catch (Throwable e) {
-							log.warn("Couldn't parse content type "+v);
+							log_msg.warn("Couldn't parse content type "+v);
 						}
 					}
 				} else {
-					log.error("malformed header line: "+headerLine);
+					log_msg.error("malformed header line: "+headerLine);
 				}
 				
 			} else {
-				log.error("malformed header line: "+headerLine);
+				log_msg.error("malformed header line: "+headerLine);
 			}
 		}
 		return headers;
@@ -272,11 +273,11 @@ public class JhttpingApplication implements CommandLineRunner {
 				int counter = 0;
 				
 				byte [] requestBytes = createRequestBytes(requestHead);
-				if (log.isDebugEnabled()) {
+				/**if (log.isDebugEnabled()) {
 					log.debug("###REQUEST BEGIN###");
 					dump(requestBytes, requestBytes.length);
 					log.debug("###REQUEST END#####");
-				}
+				}**/
 				while (maxCount<=0 || (counter<maxCount)) {
 					ping(host, inetAdress,port,requestBytes, protocol.equals("https"));
 					try {
@@ -287,16 +288,16 @@ public class JhttpingApplication implements CommandLineRunner {
 					counter++;
 				}
 			} else {
-				log.error("Unsupported url protocol: "+protocol);
+				log_msg.error("Unsupported url protocol: "+protocol);
 			}
 			
 			
 		} catch (MalformedURLException e) {
-			log.error("Malformed url: "+urlStr);
+			log_msg.error("Malformed url: "+urlStr);
 		} catch (IllegalArgumentException e) {
-			log.error(e.getMessage());
+			log_msg.error(e.getMessage());
 		} catch (Throwable e) {
-			log.error("Failure",e);
+			log_msg.error("Failure",e);
 		}
 	}
 	
@@ -305,8 +306,8 @@ public class JhttpingApplication implements CommandLineRunner {
 		out.write(requestHead.getBytes(Charset.forName("ISO-8859-1")));
 		if (method.toUpperCase().equals("POST") && data.length() > 0) {
 			Charset cs = (dataCharset == null)?Charset.forName("ISO-8859-1"):dataCharset;
-			if (log.isDebugEnabled()) {
-				log.debug("request body charset "+cs.displayName());
+			if (log_msg.isDebugEnabled()) {
+				log_msg.debug("request body charset "+cs.displayName());
 			}
 			out.write(data.getBytes(cs));
 		}
@@ -316,6 +317,8 @@ public class JhttpingApplication implements CommandLineRunner {
 	
 	
 	private void ping(String host, InetAddress address, int port, byte[] requestBytes, boolean ssl) {
+		
+		
 		
 		int headerBytes = -1;
 		int bodyBytes = -1;
@@ -388,10 +391,10 @@ public class JhttpingApplication implements CommandLineRunner {
 			
 			
 		} catch (IOException e) {
-			log.error(e.getMessage());
+			log_msg.error(e.getMessage());
 			socket = null;
 		} finally {
-			if (connectTime >0) {
+			if (connectTime >=0) {
 				log.info("connected to "+address.getHostName()+":"+port+" connect time = "+connectTime+", write time = "+writeTime+", wait time = "+waitTime+", read time = "+readTime+", total time = "+totalTime+", header size = "+headerBytes+", body size = "+bodyBytes+", total size = "+totalBytes+", status code = "+responseCode);
 			}	
 		}
@@ -460,9 +463,9 @@ public class JhttpingApplication implements CommandLineRunner {
 	private int readNextPart(ByteArrayOutputStream out, byte[] buf, InputStream input) throws IOException{
 		int read = input.read(buf);
 		if (read > 0) {
-			if (log.isDebugEnabled()) {
+			/**if (log.isDebugEnabled()) {
 				dump(buf, read);
-			}
+			}**/
 			out.write(buf, 0, read);
 		}	
 		if (read < 0) {

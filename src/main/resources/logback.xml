@@ -1,14 +1,23 @@
 <configuration>
-    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+    <appender name="CONSOLE_OUTPUT" class="ch.qos.logback.core.ConsoleAppender">
         <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
     		<pattern>%msg%n</pattern>
   		</encoder>
     </appender>
+    
+    <appender name="CONSOLE_MSG" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+    		<pattern>%p %msg%n</pattern>
+  		</encoder>
+    </appender>
   
-    <logger name="jhttping" level="info" additivity="false">
-        <appender-ref ref="CONSOLE"/>
+    <logger name="jhttping_output" level="info" additivity="false">
+        <appender-ref ref="CONSOLE_OUTPUT"/>
+    </logger>
+    <logger name="jhttping_msg" level="error" additivity="false">
+        <appender-ref ref="CONSOLE_MSG"/>
     </logger>
     <root level="error">
-        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="CONSOLE_MSG"/>
     </root>
 </configuration>
