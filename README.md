@@ -1,7 +1,7 @@
 # Description
 
 Jhttping is a java utility to measure the response times of a web service. It's partly inspired by httping. 
-Jhttping shows how long it takes to connect to an url to retriev the first part of the response and then the rest.
+Jhttping shows how long it takes to connect to an url to retrieve the first part of the response and then the rest of it.
 
 # Synopsys
 
