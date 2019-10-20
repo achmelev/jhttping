@@ -9,7 +9,6 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.MalformedURLException;
 import java.net.Socket;
-import java.net.SocketAddress;
 import java.net.URL;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
@@ -191,8 +190,8 @@ public class JhttpingApplication implements CommandLineRunner {
 		builder.append(hd.getName()+": "+hd.getValue()+"\r\n");
 	}
 	
-	private List<Header> createHeaders(URL url) {
-		return mergeHeaderLists(getDefaultHeaders(url), getCustomHeaders());
+	private List<Header> createHeaders(URL url, byte [] body) {
+		return mergeHeaderLists(getDefaultHeaders(url, body), getCustomHeaders());
 	}
 	
 	private List<String> getNonEmptyAdditionalHeaders() {
@@ -238,7 +237,7 @@ public class JhttpingApplication implements CommandLineRunner {
 		return headers;
 	}
 	
-	private List<Header> getDefaultHeaders(URL url) {
+	private List<Header> getDefaultHeaders(URL url, byte [] body) {
 		String host = url.getHost();
 		List<Header> headers = new ArrayList<Header>();
 
@@ -249,6 +248,9 @@ public class JhttpingApplication implements CommandLineRunner {
 		} else {
 			headers.add(new Header("User-Agent",agent));
 		}
+		if (body != null) {
+			headers.add(new Header("Content-Length",body.length+""));
+		}	
 		
 		return headers;
 	}
@@ -289,7 +291,8 @@ public class JhttpingApplication implements CommandLineRunner {
 				}
 				InetAddress inetAdress = InetAddress.getByName(host);
 				String pathAndQuery =  path+((query == null)?"":"?"+query); 
-				String requestHead = createHttpRequestHead(host,pathAndQuery, method, createHeaders(url));
+				byte [] body = createRequestBody();
+				String requestHead = createHttpRequestHead(host,pathAndQuery, method, createHeaders(url, body));
 				if (port <= 0) {
 					if (protocol.equals("http")) {
 						port = 80;
@@ -300,7 +303,7 @@ public class JhttpingApplication implements CommandLineRunner {
 				log.info("PING "+inetAdress.getHostAddress()+":"+port+"("+pathAndQuery+")");
 				int counter = 0;
 				
-				byte [] requestBytes = createRequestBytes(requestHead);
+				byte [] requestBytes = createRequestBytes(requestHead, body);
 				if (verbosityLevel > 1) {
 					log.info("###REQUEST BEGIN###");
 					dump(requestBytes, requestBytes.length);
@@ -329,9 +332,17 @@ public class JhttpingApplication implements CommandLineRunner {
 		}
 	}
 	
-	private byte [] createRequestBytes(String requestHead) throws IOException {
+	private byte [] createRequestBytes(String requestHead, byte [] body) throws IOException {
 		ByteArrayOutputStream out = new ByteArrayOutputStream();
 		out.write(requestHead.getBytes(Charset.forName("ISO-8859-1")));
+		if (body != null) {
+			out.write(body);
+		}
+		return out.toByteArray();
+	}
+	
+	private byte [] createRequestBody() throws IOException {
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
 		if (method.toUpperCase().equals("POST") && (data.length() > 0||file.length() > 0)) {
 			byte [] toWrite = null;
 			if (file.length() > 0) {
@@ -339,6 +350,7 @@ public class JhttpingApplication implements CommandLineRunner {
 					toWrite = FileUtils.readFileToByteArray(new File(file));
 				} catch (IOException e) {
 					log_msg.error("Couldn't read bytes from "+file);
+					return null;
 				}
 			} else {
 				Charset cs = (dataCharset == null)?Charset.forName("ISO-8859-1"):dataCharset;
@@ -348,16 +360,15 @@ public class JhttpingApplication implements CommandLineRunner {
 				toWrite=data.getBytes(cs);
 			}
 			out.write(toWrite);
+			return out.toByteArray();
+		} else {
+			return null;
 		}
-		
-		return out.toByteArray();
 	}
 	
 	
 	private void ping(String host, InetAddress address, int port, byte[] requestBytes, boolean ssl) {
-		
-		
-		
+
 		int headerBytes = -1;
 		int bodyBytes = -1;
 		int totalBytes = -1;
