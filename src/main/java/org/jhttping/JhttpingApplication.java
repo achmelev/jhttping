@@ -49,6 +49,8 @@ public class JhttpingApplication implements CommandLineRunner {
 	private static Logger log_msg = LoggerFactory.getLogger("jhttping_msg");
 	private Socket socket = null;
 	
+	private static FastString CRLF = new FastString("\r\n");
+	
 	@Value("${interval}")
 	private int pingInterval;
 	@Value("${bufsize}")
@@ -512,6 +514,7 @@ public class JhttpingApplication implements CommandLineRunner {
 		cinput.close();
 		return metric.getBytesTransferred();
 	}
+	
 	
 	private int readNextPart(ByteArrayOutputStream out, byte[] buf, InputStream input) throws IOException{
 		int read = input.read(buf);
