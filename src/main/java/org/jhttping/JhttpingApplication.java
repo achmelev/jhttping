@@ -2,6 +2,7 @@ package org.jhttping;
 
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetAddress;
@@ -27,6 +28,7 @@ import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
+import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.entity.ContentType;
 import org.apache.http.impl.io.ChunkedInputStream;
@@ -66,6 +68,8 @@ public class JhttpingApplication implements CommandLineRunner {
 	private List<String> additionalHeaders;
 	@Value("${data}")
 	private String data;
+	@Value("${file}")
+	private String file;
 	@Value("${receivetimeout}")
 	private int readTimeout;
 	@Value("${connecttimeout}")
@@ -143,6 +147,7 @@ public class JhttpingApplication implements CommandLineRunner {
 		opts.addOption("b", "bufsize", true,"Read buffer size to use. (in bytes, default is 8192)");
 		opts.addOption("H", "headers", true,"Header lines to send. Separate multiple values with a space");
 		opts.addOption("d", "data", true,"Request body to send (only for POST requests)");
+		opts.addOption("f", "file", true,"A file to read the request body to send (only for POST requests)");
 		opts.addOption("v", "verbose", false,"Print debug messages");
 		opts.addOption("V", "trc", false,"Print debug messages and trace the sent and received bytes");
 		opts.addOption("t", "receivetimeout", true,"Data receiving timeout in seconds");
@@ -327,12 +332,22 @@ public class JhttpingApplication implements CommandLineRunner {
 	private byte [] createRequestBytes(String requestHead) throws IOException {
 		ByteArrayOutputStream out = new ByteArrayOutputStream();
 		out.write(requestHead.getBytes(Charset.forName("ISO-8859-1")));
-		if (method.toUpperCase().equals("POST") && data.length() > 0) {
-			Charset cs = (dataCharset == null)?Charset.forName("ISO-8859-1"):dataCharset;
-			if (log_msg.isDebugEnabled()) {
-				log_msg.debug("request body charset "+cs.displayName());
+		if (method.toUpperCase().equals("POST") && (data.length() > 0||file.length() > 0)) {
+			byte [] toWrite = null;
+			if (file.length() > 0) {
+				try {
+					toWrite = FileUtils.readFileToByteArray(new File(file));
+				} catch (IOException e) {
+					log_msg.error("Couldn't read bytes from "+file);
+				}
+			} else {
+				Charset cs = (dataCharset == null)?Charset.forName("ISO-8859-1"):dataCharset;
+				if (log_msg.isDebugEnabled()) {
+					log_msg.debug("request body charset "+cs.displayName());
+				}
+				toWrite=data.getBytes(cs);
 			}
-			out.write(data.getBytes(cs));
+			out.write(toWrite);
 		}
 		
 		return out.toByteArray();
