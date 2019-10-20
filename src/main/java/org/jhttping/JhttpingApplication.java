@@ -23,6 +23,7 @@ import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.HelpFormatter;
+import org.apache.commons.cli.MissingArgumentException;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.lang3.StringUtils;
@@ -36,6 +37,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.LoggerContext;
 
 @SpringBootApplication
 public class JhttpingApplication implements CommandLineRunner {
@@ -67,6 +71,8 @@ public class JhttpingApplication implements CommandLineRunner {
 
 	private static Options options;
 	
+	private static int verbosityLevel = 0;
+	
 	@Value("${url}")
 	private String urlStr;
 		
@@ -79,7 +85,12 @@ public class JhttpingApplication implements CommandLineRunner {
 			// parse the command line arguments
 		    try {
 				CommandLine line = parser.parse( options, args );
+				if (line.hasOption("v")) {
+					verbosityLevel = 1;
+				}
 				SpringApplication.run(JhttpingApplication.class, convertToSpringArgs(line));
+		    } catch (org.apache.commons.cli.ParseException e1) {
+		    	log_msg.error(e1.getMessage());
 			} catch (Throwable e) {
 				log_msg.error("Unexpected exception",e);
 				System.exit(1);
@@ -126,6 +137,7 @@ public class JhttpingApplication implements CommandLineRunner {
 		opts.addOption("b", "bufsize", true,"Read buffer size to use. (in bytes, default is 8192)");
 		opts.addOption("H", "headers", true,"Header lines to send. Separate multiple values with a space");
 		opts.addOption("d", "data", true,"Request body to send (only for POST requests)");
+		opts.addOption("v", "verbose", false,"Print debug messages");
 		Option headersOption = opts.getOption("H");
 		headersOption.setArgs(Option.UNLIMITED_VALUES);
 		
@@ -140,7 +152,9 @@ public class JhttpingApplication implements CommandLineRunner {
 	
 	@Override
     public void run(String... args) {
-		
+		if (verbosityLevel > 0) {
+			changeLogLevelToDebug();
+		}	
         if (log_msg.isDebugEnabled()) {
         	log_msg.debug("Config values interval="+pingInterval+", bufsize="+bufSize+", headreadlimit="+headReadLimit+", count = "+maxCount+", version="+version+", method="+method);
         }
@@ -478,6 +492,13 @@ public class JhttpingApplication implements CommandLineRunner {
 		String str = new String(buf, Charset.forName("ISO-8859-1"));
 		int index = str.indexOf("\r\n\r\n");
 		return index;
+	}
+	
+	private static void changeLogLevelToDebug() {
+		log.info("Verbose mode");
+		Level level = Level.DEBUG;
+		ch.qos.logback.classic.Logger root = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger("jhttping_msg");
+	    root.setLevel(level);
 	}
 	
 	private void dump(byte [] bytes, int length) {
