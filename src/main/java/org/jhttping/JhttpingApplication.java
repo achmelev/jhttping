@@ -5,8 +5,10 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.MalformedURLException;
 import java.net.Socket;
+import java.net.SocketAddress;
 import java.net.URL;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
@@ -64,6 +66,10 @@ public class JhttpingApplication implements CommandLineRunner {
 	private List<String> additionalHeaders;
 	@Value("${data}")
 	private String data;
+	@Value("${receivetimeout}")
+	private int readTimeout;
+	@Value("${connecttimeout}")
+	private int connectTimeout;
 	
 	private Charset dataCharset;
 
@@ -139,6 +145,8 @@ public class JhttpingApplication implements CommandLineRunner {
 		opts.addOption("d", "data", true,"Request body to send (only for POST requests)");
 		opts.addOption("v", "verbose", false,"Print debug messages");
 		opts.addOption("V", "trc", false,"Print debug messages and trace the sent and received bytes");
+		opts.addOption("t", "receivetimeout", true,"Data receiving timeout in seconds");
+		opts.addOption("T", "connecttimeout", true,"Connection establishment timeout in seconds");
 		Option headersOption = opts.getOption("H");
 		headersOption.setArgs(Option.UNLIMITED_VALUES);
 		
@@ -157,7 +165,7 @@ public class JhttpingApplication implements CommandLineRunner {
 			changeLogLevelToDebug();
 		}	
         if (log_msg.isDebugEnabled()) {
-        	log_msg.debug("Config values interval="+pingInterval+", bufsize="+bufSize+", headreadlimit="+headReadLimit+", count = "+maxCount+", version="+version+", method="+method);
+        	log_msg.debug("Config values interval="+pingInterval+", bufsize="+bufSize+", headreadlimit="+headReadLimit+", count = "+maxCount+", version="+version+", method="+method+", read timeout= "+readTimeout+", connection timeout = "+connectTimeout);
         }
         doPings();
         
@@ -417,15 +425,19 @@ public class JhttpingApplication implements CommandLineRunner {
 	
 	private void connect(String hostName, InetAddress address, int port, boolean ssl) throws IOException {
 		if (!ssl) {
-			socket = new Socket(address, port);
+			socket = new Socket();
+			socket.setSoTimeout(readTimeout*1000);
+			socket.connect(new InetSocketAddress(address, port), connectTimeout*1000);
 		} else {
 			SSLSocketFactory sslsocketfactory = (SSLSocketFactory)SSLSocketFactory.getDefault();
-			SSLSocket sslSocket = (SSLSocket)sslsocketfactory.createSocket(address, port);
+			SSLSocket sslSocket = (SSLSocket)sslsocketfactory.createSocket();
 			SSLParameters params = sslSocket.getSSLParameters();
 			List sniHostNames = new ArrayList(1);
 			sniHostNames.add(new SNIHostName(hostName));
 			params.setServerNames(sniHostNames);
 			sslSocket.setSSLParameters(params);
+			sslSocket.setSoTimeout(readTimeout*1000);
+			sslSocket.connect(new InetSocketAddress(address, port), connectTimeout*1000);
 			sslSocket.startHandshake();
 			socket = sslSocket;
 			
