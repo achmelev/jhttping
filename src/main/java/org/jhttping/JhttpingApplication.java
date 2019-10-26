@@ -12,6 +12,7 @@ import java.net.Socket;
 import java.net.URL;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -75,6 +76,10 @@ public class JhttpingApplication implements CommandLineRunner {
 	private int readTimeout;
 	@Value("${connecttimeout}")
 	private int connectTimeout;
+	@Value("${user1}")
+	private String user;
+	@Value("${password}")
+	private String password;
 	
 	private Charset dataCharset;
 
@@ -116,7 +121,7 @@ public class JhttpingApplication implements CommandLineRunner {
 		for (Option o: options.getOptions()) {
 			if (line.hasOption(o.getOpt())) {
 				if (o.hasArg() && !o.hasArgs()) {
-					args.add("--"+o.getLongOpt()+"="+line.getOptionValue(o.getOpt()));
+					args.add("--"+convertToSpringOpt(o.getLongOpt())+"="+line.getOptionValue(o.getOpt()));
 				} else if (o.hasArgs()) {
 					String [] values = line.getOptionValues(o.getOpt());
 					StringBuilder builder = new StringBuilder();
@@ -138,6 +143,15 @@ public class JhttpingApplication implements CommandLineRunner {
 		
 	}
 	
+	private static String convertToSpringOpt(String opt) {
+		if (opt.equals("user")) {
+			return "user1";
+		} else {
+			return opt;
+		}
+	}
+	
+	
 	private static Options createOpts() {
 		Options opts = new Options();
 		opts.addOption("g", "url", true,"This selects the url to probe. E.g.: http://localhost/");
@@ -153,6 +167,8 @@ public class JhttpingApplication implements CommandLineRunner {
 		opts.addOption("V", "trc", false,"Print debug messages and trace the sent and received bytes");
 		opts.addOption("t", "receivetimeout", true,"Data receiving timeout in seconds");
 		opts.addOption("T", "connecttimeout", true,"Connection establishment timeout in seconds");
+		opts.addOption("U", "user", true,"User name for the basich authentication");
+		opts.addOption("P", "password", true,"Password for the basic authentication. Will be asked for on the console if missing");
 		Option headersOption = opts.getOption("H");
 		headersOption.setArgs(Option.UNLIMITED_VALUES);
 		
@@ -236,7 +252,23 @@ public class JhttpingApplication implements CommandLineRunner {
 				log_msg.error("malformed header line: "+headerLine);
 			}
 		}
+		addBasicAuthorization(headers);
 		return headers;
+	}
+	
+	private void addBasicAuthorization(List<Header> headers) {
+		if (user.trim().length() > 0) {
+			String u = user.trim();
+			String p = password.trim();
+			if (p.equals("##########NOPASSWORD############")) {
+				PasswordReader reader = new PasswordReader();
+				p = reader.readPassword();
+			}
+			String authString = u+":"+p;
+			Charset cht = Charset.forName("UTF-8");
+			String encoded = new String(Base64.getEncoder().encode(authString.getBytes(cht)), cht);
+			headers.add(new Header("Authorization","Basic "+encoded));
+		}
 	}
 	
 	private List<Header> getDefaultHeaders(URL url, byte [] body) {
