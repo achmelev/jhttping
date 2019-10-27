@@ -35,13 +35,13 @@ public class RequestHead {
 					String headerLine = reader.readLine();
 					while (headerLine != null) {
 						if (headerLine.indexOf(':')>0) {
-							String name = headerLine.substring(0,headerLine.indexOf(':')).trim();
+							String name = headerLine.substring(0,headerLine.indexOf(':')).trim().toLowerCase();
 							String value = headerLine.substring(headerLine.indexOf(':')+1,headerLine.length()).trim();
-							if (name.equals("Content-Length")) {
+							if (name.equals("content-length")) {
 								contentLengthValue = Integer.parseInt(value);
-							} else if (name.endsWith("Transfer-Encoding")) {
+							} else if (name.endsWith("transfer-encoding")) {
 								chunked = value.equals("chunked");
-							} else if (name.endsWith("Connection")) {
+							} else if (name.endsWith("connection")) {
 								connectionClosed = value.equals("close");
 							}
 						}

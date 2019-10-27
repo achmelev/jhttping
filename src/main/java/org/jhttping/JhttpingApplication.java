@@ -34,6 +34,7 @@ import org.apache.http.entity.ContentType;
 import org.apache.http.impl.io.ChunkedInputStream;
 import org.apache.http.impl.io.HttpTransportMetricsImpl;
 import org.apache.http.impl.io.SessionInputBufferImpl;
+import org.jhttping.chunked.ChunkedBodyReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -338,7 +339,7 @@ public class JhttpingApplication implements CommandLineRunner {
 				byte [] requestBytes = createRequestBytes(requestHead, body);
 				if (verbosityLevel > 1) {
 					log.info("###REQUEST BEGIN###");
-					dump(requestBytes, requestBytes.length);
+					dump(requestBytes, 0, requestBytes.length);
 					log.info("###REQUEST END#####");
 				}
 				while (maxCount<=0 || (counter<maxCount)) {
@@ -427,12 +428,12 @@ public class JhttpingApplication implements CommandLineRunner {
 			socket.getOutputStream().write(requestBytes);
 			writeTime = System.currentTimeMillis()-t2;
 			
-			BufferedInputStream input = new BufferedInputStream(socket.getInputStream(), bufSize);
-			input.mark(headReadLimit);
+			InputStream input = socket.getInputStream();
 			
 			long t3 = System.currentTimeMillis();
 			int read = readNextPart(out, buf, input);
 			waitTime = System.currentTimeMillis()-t3;
+			
 			
 			if (read > 0) {
 				headEndPos = findEmptyLine(out.toByteArray());
@@ -452,7 +453,7 @@ public class JhttpingApplication implements CommandLineRunner {
 			
 			long t4 = System.currentTimeMillis();
 			if (head.isChunked()) {
-				bodyBytes = (int)readChunkedBody(input, headEndPos, bufSize);
+				bodyBytes = (int)readChunkedBody(head, input, bufSize);
 			} else {
 				bodyBytes= readBody(head, input, buf);
 			}
@@ -530,30 +531,25 @@ public class JhttpingApplication implements CommandLineRunner {
 		return body.size();
 	}
 	
-	private long readChunkedBody(InputStream input, int headEndPos, int bufSize) throws IOException {
-		input.reset();
-		byte[] rereadBuf = new byte[headEndPos+4];
-		int read = input.read(rereadBuf);
-		if (read != headEndPos+4) {
-			throw new IOException("reread failed!");
+	private long readChunkedBody(RequestHead head, InputStream input, int bufSize) throws IOException {
+		ChunkedBodyReader reader = new ChunkedBodyReader(input, bufSize, head.getBody());
+		reader.readChunkedBody();
+		return reader.getBodySize();
+	}
+	
+	public static void dumpServerData(byte [] buf, int count) {
+		if (verbosityLevel > 1) {
+			log.info("##############Server data##############");
+			dump(buf, 0, count);
+			log.info("##############Server data end##############");
 		}
-		HttpTransportMetricsImpl metric = new HttpTransportMetricsImpl();
-		SessionInputBufferImpl sessionInputBuffer = new SessionInputBufferImpl(metric, bufSize);
-		sessionInputBuffer.bind(input);
-		ChunkedInputStream cinput = new ChunkedInputStream(sessionInputBuffer);
-		cinput.close();
-		return metric.getBytesTransferred();
 	}
 	
 	
 	private int readNextPart(ByteArrayOutputStream out, byte[] buf, InputStream input) throws IOException{
 		int read = input.read(buf);
 		if (read > 0) {
-			if (verbosityLevel > 1) {
-				log.info("##############Server data##############");
-				dump(buf, read);
-				log.info("##############Server data end##############");
-			}
+			dumpServerData(buf, read);
 			out.write(buf, 0, read);
 		}	
 		if (read < 0) {
@@ -575,8 +571,8 @@ public class JhttpingApplication implements CommandLineRunner {
 	    root.setLevel(level);
 	}
 	
-	private void dump(byte [] bytes, int length) {
-		byte[] printableData = convertToPrintable(bytes, length);
+	private static void dump(byte [] bytes,int offset, int length) {
+		byte[] printableData = convertToPrintable(bytes,offset, length);
 		String str = new String(printableData);
 		if (str.endsWith("\n")) {
 			str = str.substring(0,str.length()-1);
@@ -584,9 +580,9 @@ public class JhttpingApplication implements CommandLineRunner {
 		log.info(str);
 	}
 	
-	private byte [] convertToPrintable(byte [] data, int length) {
+	private static byte [] convertToPrintable(byte [] data, int offset, int length) {
 		ByteArrayOutputStream baos = new ByteArrayOutputStream();
-		for (int i=0;i<length; i++) {
+		for (int i=offset;i<offset+length; i++) {
 			byte b = data[i];
 			if ((b<0x20 && b!=0xA && b!=0xD && b!=0x9) || (b>0x7E && b<0xA0)) {
 				baos.write(0x3c);

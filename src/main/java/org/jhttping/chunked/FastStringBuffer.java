@@ -20,6 +20,12 @@ public class FastStringBuffer {
 		length+=str.length();
 	}
 	
+	public void clear() {
+		parts = new ArrayList<FastString>();
+		length = 0;
+		offset = 0;
+	}
+	
 	public void contract(int length) {
 		if (this.length < length) {
 			throw new IndexOutOfBoundsException(this.length+":"+length);
@@ -127,6 +133,30 @@ public class FastStringBuffer {
         }
         return -1;
     }
+    
+    public FastString substring(int fromIndex, int toIndex) {
+    	if (fromIndex < 0 || toIndex > length) {
+    		throw new IndexOutOfBoundsException(fromIndex+":"+toIndex);
+    	}
+    	int targetLength = toIndex-fromIndex;
+    	FastStringBufferCursor cursor = new FastStringBufferCursor();
+    	cursor.moveTo(fromIndex);
+    	FastString result = new FastString();
+    	int partNumber = cursor.partNumber;
+    	int index = cursor.index;
+    	int remaining = targetLength; 
+    	while (remaining>0) {
+    		int partLength = parts.get(partNumber).length()-index;
+    		int readLength = Math.min(partLength, remaining);
+    		result = result.concat(parts.get(0).substring(index, index+readLength));
+    		remaining-=readLength;
+    		if (remaining > 0) {
+    			partNumber++;
+    			index = 0;
+    		}
+    	}
+    	return result;
+    }
 	
 	
 	
@@ -182,6 +212,7 @@ public class FastStringBuffer {
 		private byte charAt() {
 			return parts.get(partNumber).charAt(index);
 		}
+		
 		
 		private FastStringBufferCursor createNewCursor() {
 			FastStringBufferCursor result = new FastStringBufferCursor();
