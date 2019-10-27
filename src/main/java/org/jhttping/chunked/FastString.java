@@ -1,4 +1,4 @@
-package org.jhttping;
+package org.jhttping.chunked;
 
 import java.nio.charset.Charset;
 import java.util.Arrays;
@@ -917,11 +917,7 @@ public class FastString
         return ((st > 0) || (len < value.length)) ? substring(st, len) : this;
     }
 
-    /**
-     * This object (which is already a string!) is itself returned.
-     *
-     * @return  the string itself.
-     */
+    
     public String toString() {
         return new String(this.value,Charset.forName("iso-8859-1"));
     }

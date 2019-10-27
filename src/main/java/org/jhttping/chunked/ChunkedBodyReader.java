@@ -1,4 +1,4 @@
-package org.jhttping;
+package org.jhttping.chunked;
 
 import java.io.InputStream;
 
