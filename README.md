@@ -27,6 +27,8 @@ Jhttping shows how long it takes to connect to an url to retrieve the first part
                                 POST, HEAD. Default is GET
     -P,--password <arg>         Password for the basic authentication. Will
                                 be asked for on the console if missing
+    -r,--reconnect              Reconnect after every probe instead of using
+                                a persistent connection                            
     -t,--receivetimeout <arg>   Data receiving timeout in seconds
     -T,--connecttimeout <arg>   Connection establishment timeout in seconds
     -U,--user <arg>             User name for the basich authentication
