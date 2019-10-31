@@ -79,6 +79,8 @@ public class JhttpingApplication implements CommandLineRunner {
 	private String user;
 	@Value("${password}")
 	private String password;
+	@Value("${reconnect}")
+	private boolean reconnect;
 	
 	private Charset dataCharset;
 
@@ -155,6 +157,7 @@ public class JhttpingApplication implements CommandLineRunner {
 		Options opts = new Options();
 		opts.addOption("g", "url", true,"This selects the url to probe. E.g.: http://localhost/");
 		opts.addOption("c", "count", true,"How many probes to send before exiting.");
+		opts.addOption("r", "reconnect", false,"Reconnect after every probe instead of using a persistent connection");
 		opts.addOption("i", "interval", true,"How many seconds to sleep between every probe sent.");
 		opts.addOption("m", "method", true,"HTTP method to use. Allowed values: GET, POST, HEAD. Default is GET");
 		opts.addOption("I", "agent", true,"User-Agent to send to the server.(instead of 'JHTTPing <version>')");
@@ -461,7 +464,7 @@ public class JhttpingApplication implements CommandLineRunner {
 			readTime = System.currentTimeMillis()-t4;
 			totalTime = (connectTime+writeTime+waitTime+readTime);
 			
-			if (head.isConnectionClosed()) {	
+			if (head.isConnectionClosed() || reconnect) {	
 				try {
 					socket.close();
 				} catch (IOException e) {
