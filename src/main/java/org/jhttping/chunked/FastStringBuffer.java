@@ -148,7 +148,7 @@ public class FastStringBuffer {
     	while (remaining>0) {
     		int partLength = parts.get(partNumber).length()-index;
     		int readLength = Math.min(partLength, remaining);
-    		result = result.concat(parts.get(0).substring(index, index+readLength));
+    		result = result.concat(parts.get(partNumber).substring(index, index+readLength));
     		remaining-=readLength;
     		if (remaining > 0) {
     			partNumber++;
@@ -156,6 +156,16 @@ public class FastStringBuffer {
     		}
     	}
     	return result;
+    }
+    
+    public String toString() {
+    	StringBuilder result = new StringBuilder();
+    	result.append("offset = "+offset+";");
+    	result.append("length = "+length+";");
+    	for (FastString p: parts) {
+    		result.append("part = "+p+";");
+    	}
+    	return result.toString();
     }
 	
 	

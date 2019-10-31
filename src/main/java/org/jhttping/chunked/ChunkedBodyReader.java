@@ -14,6 +14,7 @@ public class ChunkedBodyReader {
 	
 	
 	private final static FastString CRLF = new FastString("\r\n"); 
+	private final static FastString SEMICOLON = new FastString(";"); 
 	
 	private int chunkCounter  = 0;
 	private int bodySize = 0;
@@ -25,6 +26,7 @@ public class ChunkedBodyReader {
 		if (body != null && body.length > 0) {
 			fBuf.expand(new FastString(body));
 		}
+		
 	}
 	
 	public void readChunkedBody() throws IOException {
@@ -35,34 +37,57 @@ public class ChunkedBodyReader {
 			bodySize+=chunkSize;
 			chunkSize = readNextChunk();
 		}
+		//read trailer
+		FastString nextLine = readNextLine();
+		while (nextLine.length() > 0) {
+			nextLine = readNextLine();
+		}
+		
 	}
 	
 	private int readNextChunk() throws IOException {
 		int size = readChunkSize();
-		int toRead = size+2;
-		if (toRead < fBuf.size()) {
-			fBuf.contract(toRead);
-		} else if (toRead == fBuf.size()) {
-			fBuf.clear();
-		} else {
-			toRead-=fBuf.size();
-			fBuf.clear();
-			int lastRead = 0;
-			while (toRead > 0) {
-				lastRead = readNextPart(false);
-				toRead-=lastRead;
+		if (size > 0) {
+			int toRead = size+2;
+			if (toRead < fBuf.size()) {
+				fBuf.contract(toRead);
+			} else if (toRead == fBuf.size()) {
+				fBuf.clear();
+			} else {
+				toRead-=fBuf.size();
+				fBuf.clear();
+				int lastRead = 0;
+				while (toRead > 0) {
+					lastRead = readNextPart(false);
+					toRead-=lastRead;
+				}
+				if (toRead<0) {
+					int offset = lastRead+toRead;
+					int count = -toRead;
+					fBuf.expand(new FastString(buf, offset, count));
+				}
 			}
-			if (toRead<0) {
-				int offset = lastRead+toRead;
-				int count = -toRead;
-				fBuf.expand(new FastString(buf, offset, count));
-			}
-		}
+			return size+2;
+		}	
 
 		return size;
 	}
 	
 	private int readChunkSize() throws IOException {
+		FastString str = readNextLine();
+		int semicolonIndex = str.indexOf(SEMICOLON);
+		if (str.indexOf(SEMICOLON)>=0) {
+			str = str.substring(0, semicolonIndex);
+		}
+		try {
+			int result = Integer.parseInt(str.toString(), 16);
+			return result;
+		} catch (NumberFormatException e) {
+			throw new IOException(e.getMessage());
+		}
+	}
+	
+	private FastString readNextLine() throws IOException {
 		int fromIndex = 0;
 		int index = fBuf.indexOf(CRLF, fromIndex);
 		while (index <0) {
@@ -70,14 +95,10 @@ public class ChunkedBodyReader {
 			readNextPart(true);
 			index = fBuf.indexOf(CRLF, fromIndex);
 		}
-		FastString sizeStr = fBuf.substring(0, index);
+		FastString str = fBuf.substring(0, index);
+		bodySize+=(str.length()+2);
 		fBuf.contract(index+2);
-		try {
-			int result = Integer.parseInt(sizeStr.toString(), 16);
-			return result;
-		} catch (NumberFormatException e) {
-			throw new IOException(e.getMessage());
-		}
+		return str;
 	}
 	
 	private int readNextPart(boolean expandBuf) throws IOException{
@@ -101,7 +122,6 @@ public class ChunkedBodyReader {
 	public int getBodySize() {
 		return bodySize;
 	}
-
 	
 
 }

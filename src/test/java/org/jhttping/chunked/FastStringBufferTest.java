@@ -126,6 +126,10 @@ public class FastStringBufferTest {
 		buf.expand(new FastString("0ABC"));
 		
 		Assert.assertEquals(new FastString("123"), buf.substring(0, 3));
+		Assert.assertEquals(new FastString("123456789"), buf.substring(0, 9));
+		Assert.assertEquals(new FastString("456789"), buf.substring(3, 9));
+		Assert.assertEquals(new FastString("4567890ABC"), buf.substring(3, 13));
+		Assert.assertEquals(new FastString("BC"), buf.substring(11, 13));
 		
 		
 	}

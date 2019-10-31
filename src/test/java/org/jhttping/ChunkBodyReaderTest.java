@@ -34,7 +34,7 @@ public class ChunkBodyReaderTest {
 		} finally {
 			Assert.assertTrue(noException);
 			Assert.assertEquals(3, reader.getChunkCounter());
-			Assert.assertEquals(23, reader.getBodySize());
+			Assert.assertEquals(builder.length(), reader.getBodySize());
 		}
 		
 	}
@@ -64,7 +64,7 @@ public class ChunkBodyReaderTest {
 		} finally {
 			Assert.assertTrue(noException);
 			Assert.assertEquals(3, reader.getChunkCounter());
-			Assert.assertEquals(23, reader.getBodySize());
+			Assert.assertEquals(builder.length(), reader.getBodySize());
 		}
 		
 	}
@@ -93,7 +93,39 @@ public class ChunkBodyReaderTest {
 		} finally {
 			Assert.assertTrue(noException);
 			Assert.assertEquals(3, reader.getChunkCounter());
-			Assert.assertEquals(23, reader.getBodySize());
+			Assert.assertEquals(builder.length()+"4\r\n".length(), reader.getBodySize());
+		}
+		
+	}
+	
+	@Test
+	public void test4() {
+		StringBuilder builder = new StringBuilder();
+		builder.append("4\r\n");
+		builder.append("Wiki\r\n");
+		builder.append("5\r\n");
+		builder.append("pedia\r\n");
+		builder.append("E;extension=value\r\n");
+		builder.append("in\r\n");
+		builder.append("\r\n");
+		builder.append(" chunks.\r\n");
+		builder.append("0\r\n");
+		builder.append("Header1: Value1\r\n");
+		builder.append("Header2: Value2\r\n");
+		builder.append("\r\n");
+		
+		ByteArrayInputStream source = new ByteArrayInputStream(builder.toString().getBytes());
+		ChunkedBodyReader reader = new ChunkedBodyReader(source, 5, null);
+		boolean noException = true;
+		try {
+			reader.readChunkedBody();
+		} catch (Exception e) {
+			e.printStackTrace();
+			noException = false;
+		} finally {
+			Assert.assertTrue(noException);
+			Assert.assertEquals(3, reader.getChunkCounter());
+			Assert.assertEquals(builder.length(), reader.getBodySize());
 		}
 		
 	}
